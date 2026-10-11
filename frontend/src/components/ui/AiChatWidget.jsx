@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { formatCurrency } from '../../lib/utils';
+import api from '../../lib/api';
 import { MessageSquare, X, Send, Sparkles, Bot, User } from 'lucide-react';
 
 export default function AiChatWidget() {
@@ -188,40 +189,30 @@ export default function AiChatWidget() {
     setInputText('');
     setIsTyping(true);
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('dompetku_token');
     let aiReply = null;
 
-    if (navigator.onLine && token) {
+    if (navigator.onLine && token && api.isConfigured()) {
       try {
-        const res = await fetch('http://localhost:5000/api/ai/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            message: textToSend,
-            context: {
-              totalBalance,
-              totalIncome,
-              totalExpense,
-              wallets,
-              budgets: budgets.map(b => {
-                const cat = categories.find(c => c.id === b.category_id);
-                const spent = transactions.filter(t => t.type === 'expense' && t.category_id === b.category_id).reduce((s, t) => s + t.amount, 0);
-                const percentage = b.limit_amount > 0 ? ((spent / b.limit_amount) * 100).toFixed(0) : 0;
-                return { categoryName: cat?.name || 'Kategori', limit: b.limit_amount, spent, percentage };
-              }),
-              categories
-            }
-          })
+        const res = await api.post('/ai/chat', {
+          message: textToSend,
+          context: {
+            totalBalance,
+            totalIncome,
+            totalExpense,
+            wallets,
+            budgets: budgets.map(b => {
+              const cat = categories.find(c => c.id === b.category_id);
+              const spent = transactions.filter(t => t.type === 'expense' && t.category_id === b.category_id).reduce((s, t) => s + t.amount, 0);
+              const percentage = b.limit_amount > 0 ? ((spent / b.limit_amount) * 100).toFixed(0) : 0;
+              return { categoryName: cat?.name || 'Kategori', limit: b.limit_amount, spent, percentage };
+            }),
+            categories
+          }
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.reply) {
-            aiReply = data.reply;
-          }
+        if (res && res.reply) {
+          aiReply = res.reply;
         }
       } catch (err) {
         console.warn('Groq AI API error, beralih ke Smart Engine lokal:', err.message);

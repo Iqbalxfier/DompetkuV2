@@ -41,6 +41,13 @@ export function AppProvider({ children }) {
       const token = localStorage.getItem('dompetku_token');
       
       if (token) {
+        if (!api.isConfigured()) {
+          const localUser = JSON.parse(localStorage.getItem('dompetku_user')) || { id: 1, name: 'Pengguna Dompetku', email: 'user@dompetku.local' };
+          setUser(localUser);
+          await refreshAll(localUser.id);
+          setIsLoading(false);
+          return;
+        }
         try {
           // Dapatkan detail profile / verifikasi token JWT
           const profile = await api.get('/auth/profile');
@@ -94,6 +101,15 @@ export function AppProvider({ children }) {
 
   // 1. REGISTER
   async function register(name, email, password) {
+    if (!api.isConfigured()) {
+      const localUser = { id: 1, name: (name || 'Pengguna Dompetku').trim(), email: (email || 'user@dompetku.local').trim() };
+      localStorage.setItem('dompetku_token', 'local_offline_token');
+      localStorage.setItem('dompetku_user', JSON.stringify(localUser));
+      setUser(localUser);
+      await refreshAll(1);
+      return localUser;
+    }
+
     const data = await api.post('/auth/register', { name, email, password });
     localStorage.setItem('dompetku_token', data.token);
     localStorage.setItem('dompetku_user', JSON.stringify(data.user));
@@ -115,6 +131,15 @@ export function AppProvider({ children }) {
 
   // 2. LOGIN
   async function login(email, password) {
+    if (!api.isConfigured()) {
+      const savedUser = JSON.parse(localStorage.getItem('dompetku_user')) || { id: 1, name: 'Pengguna Dompetku', email: email.trim() };
+      localStorage.setItem('dompetku_token', 'local_offline_token');
+      localStorage.setItem('dompetku_user', JSON.stringify(savedUser));
+      setUser(savedUser);
+      await refreshAll(savedUser.id);
+      return savedUser;
+    }
+
     const data = await api.post('/auth/login', { email, password });
     localStorage.setItem('dompetku_token', data.token);
     localStorage.setItem('dompetku_user', JSON.stringify(data.user));
@@ -137,6 +162,15 @@ export function AppProvider({ children }) {
 
   // 3. GOOGLE SIGN-IN
   async function loginWithGoogle(name, email) {
+    if (!api.isConfigured()) {
+      const localUser = { id: 1, name: name || 'Pengguna Dompetku', email: email || 'user@example.com' };
+      localStorage.setItem('dompetku_token', 'local_offline_token');
+      localStorage.setItem('dompetku_user', JSON.stringify(localUser));
+      setUser(localUser);
+      await refreshAll(1);
+      return localUser;
+    }
+
     const data = await api.post('/auth/google', { name, email });
     localStorage.setItem('dompetku_token', data.token);
     localStorage.setItem('dompetku_user', JSON.stringify(data.user));
@@ -179,14 +213,14 @@ export function AppProvider({ children }) {
     setUser(updatedUser);
     localStorage.setItem('dompetku_user', JSON.stringify(updatedUser));
 
-    if (navigator.onLine) {
+    if (navigator.onLine && api.isConfigured()) {
       await api.put('/auth/profile', { name: name.trim() }).catch(() => {});
     }
   }
 
   // SINKRONISASI DUA ARAH OFFLINE-FIRST
   async function syncDataWithServer(userId = user?.id) {
-    if (!userId || !navigator.onLine) return;
+    if (!userId || !navigator.onLine || !api.isConfigured()) return;
 
     try {
       // Ambil data pending dengan filter yang benar (Dexie tidak support multi-field where object)
@@ -624,10 +658,16 @@ export function AppProvider({ children }) {
   }
 
   async function forgotPassword(email) {
+    if (!api.isConfigured()) {
+      return { message: 'Mode offline: Silakan langsung masuk ke akun lokal Anda.' };
+    }
     return await api.post('/auth/forgot-password', { email });
   }
 
   async function resetPassword(email, resetToken, newPassword) {
+    if (!api.isConfigured()) {
+      return { message: 'Mode offline: Password lokal berhasil diperbarui.' };
+    }
     return await api.post('/auth/reset-password', { email, resetToken, newPassword });
   }
 
